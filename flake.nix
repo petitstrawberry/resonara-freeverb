@@ -1,5 +1,5 @@
 {
-  description = "Freeverb Scarlet native CLAP development";
+  description = "Resonara Freeverb native CLAP development";
   nixConfig = {
     extra-substituters = [ "https://scarlet-rust-toolchain.cachix.org" ];
     extra-trusted-public-keys = [ "scarlet-rust-toolchain.cachix.org-1:p+coBExi0nNTIvWF/oM9H9/1/GhwFtqGZ2Vs+4pYl6o=" ];

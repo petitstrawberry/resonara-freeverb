@@ -1,11 +1,11 @@
 [package]
-name = "freeverb-scarlet"
-version = "0.1.0"
+name = "resonara-freeverb"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 publish = false
-repository = "https://github.com/petitstrawberry/freeverb-scarlet"
-description = "Freestanding stereo Freeverb CLAP reverb for Scarlet OS"
+repository = "https://github.com/petitstrawberry/resonara-freeverb"
+description = "Freestanding stereo Freeverb CLAP reverb for Resonara"
 [lib]
 crate-type = ["cdylib"]
 [dependencies]
@@ -22,3 +22,4 @@ lto = true
 opt-level = 3
 debug = 0
 [workspace]
+exclude = ["editor"]

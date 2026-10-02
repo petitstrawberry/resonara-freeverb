@@ -19,7 +19,19 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
           extra_nix_config: accept-flake-config = true
       - name: Format, DSP, CLAP ABI and builder regressions
-        run: nix develop .#host --command bash -c 'cargo fmt --all -- --check && cargo test --locked && python3 test-build.py'
+        run: nix develop .#host --command bash -c 'cargo fmt --all -- --check && cargo test --locked && python3 test-build.py && cargo fmt --manifest-path editor/Cargo.toml -- --check && cargo test --locked --manifest-path editor/Cargo.toml'
+      - name: Build macOS CLAP bundle
+        if: runner.os == 'macOS'
+        run: nix develop .#host --command python3 build.py --arch macos --output artifacts/macos
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: resonara-freeverb-macos
+          path: |
+            artifacts/macos/resonara-freeverb.clap
+            artifacts/macos/resonara-freeverb.LICENSE.txt
+            artifacts/macos/build.json
+          if-no-files-found: error
   native:
     strategy:
       matrix:
@@ -38,7 +50,7 @@ jobs:
         run: nix develop --command python3 build.py --arch ${{ matrix.arch }} --output artifacts/${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
-          name: freeverb-scarlet-${{ matrix.arch }}
+          name: resonara-freeverb-${{ matrix.arch }}
           path: |
             artifacts/${{ matrix.arch }}/staging/system/plugins/*
             artifacts/${{ matrix.arch }}/build.json

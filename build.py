@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build and audit the freestanding Freeverb Scarlet CLAP plugin."""
+"""Build and audit the freestanding Resonara Freeverb CLAP plugin."""
 import argparse
 import hashlib
 import json
 import os
+import plistlib
 from pathlib import Path
 import re
 import shutil
@@ -73,14 +74,53 @@ def audit(path, machine):
             "sha256": hashlib.sha256(data).hexdigest()}
 
 
+def build_macos(command, env, output, crate_name, plugin_name):
+    # CLAP's macOS discovery uses a .clap bundle; Resonara also loads its raw
+    # Mach-O sidecar when bundled beside the executable.
+    host = subprocess.check_output([env["RUSTC"], "-vV"], text=True)
+    target = re.search(r"^host: (.+)$", host, re.M).group(1)
+    if not target.endswith("apple-darwin"):
+        raise RuntimeError("--arch macos requires a macOS host toolchain")
+    subprocess.run(command, env=env, check=True)
+    artifact = output / f"cargo/release/lib{crate_name}.dylib"
+    dependencies = subprocess.check_output(["otool", "-L", str(artifact)], text=True)
+    libraries = [line.strip().split(" (")[0] for line in dependencies.splitlines()[2:] if line.strip()]
+    if libraries != ["/usr/lib/libSystem.B.dylib"]:
+        raise RuntimeError("unexpected macOS dependencies: " + str(libraries))
+    symbols = subprocess.check_output(["nm", "-gU", str(artifact)], text=True)
+    if not re.search(r"\b[SD] _clap_entry$", symbols, re.M):
+        raise RuntimeError("clap_entry must be exported data")
+    bundle = output / f"{plugin_name}.clap"
+    binary = bundle / f"Contents/MacOS/{plugin_name}"
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(artifact, binary)
+    binary.chmod(0o755)
+    version = re.search(r'^version = "([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M).group(1)
+    info = dict(CFBundleExecutable=plugin_name, CFBundleIdentifier="org.resonara.freeverb",
+                CFBundleName="Resonara Freeverb", CFBundlePackageType="BNDL",
+                CFBundleShortVersionString=version, CFBundleVersion=version)
+    (bundle / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
+    subprocess.run(["codesign", "--force", "--sign", "-", str(bundle)], check=True)
+    subprocess.run(["codesign", "--verify", "--strict", str(bundle)], check=True)
+    license_path = output / f"{plugin_name}.LICENSE.txt"
+    license_path.write_text("\n".join(f"=== {p.relative_to(ROOT)} ===\n\n{p.read_text()}" for p in [ROOT / "LICENSE", *sorted((ROOT / "vendor").rglob("LICENSE*"))]))
+    report = dict(artifact=str(bundle), original_target=target, needed_libraries=libraries,
+                  sha256=hashlib.sha256(binary.read_bytes()).hexdigest(), size_bytes=binary.stat().st_size,
+                  license_notices=str(license_path), build_command=command, rustc=host.strip(),
+                  runtime_validation="Mach-O audited; execute through a CLAP host to validate runtime",
+                  signature="ad-hoc; not notarized")
+    (output / "build.json").write_text(json.dumps(report, indent=2) + "\n")
+    print(bundle)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--arch", choices=("linux", "aarch64", "riscv64"), required=True)
+    parser.add_argument("--arch", choices=("macos", "linux", "aarch64", "riscv64"), required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--toolchain", type=Path, help="toolchain prefix containing bin/{rustc,cargo,rustdoc}")
     parser.add_argument("--offline", action="store_true")
     args = parser.parse_args()
-    plugin_name = "freeverb-scarlet"
+    plugin_name = "resonara-freeverb"
     crate_name = plugin_name.replace("-", "_")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -96,6 +136,11 @@ def main():
     env.update(RUSTC=rustc, RUSTDOC=rustdoc, CARGO_TARGET_DIR=str(output / "cargo"))
     env["PATH"] = str(tool_bin) + os.pathsep + env.get("PATH", "")
     command = [cargo, "build", "--release", "--locked", "--manifest-path", str(ROOT / "Cargo.toml")]
+    if args.arch == "macos":
+        if args.offline:
+            command.append("--offline")
+        build_macos(command, env, output, crate_name, plugin_name)
+        return
     original = "host Linux"
     if args.arch == "linux":
         machine = 62
