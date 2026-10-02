@@ -1,0 +1,45 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  host:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: accept-flake-config = true
+      - name: Format, DSP, CLAP ABI and builder regressions
+        run: nix develop .#host --command bash -c 'cargo fmt --all -- --check && cargo test --locked && python3 test-build.py'
+  native:
+    strategy:
+      matrix:
+        arch: [aarch64, riscv64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            accept-flake-config = true
+            extra-substituters = https://scarlet-rust-toolchain.cachix.org
+            extra-trusted-public-keys = scarlet-rust-toolchain.cachix.org-1:p+coBExi0nNTIvWF/oM9H9/1/GhwFtqGZ2Vs+4pYl6o=
+      - name: Build and audit native CLAP
+        run: nix develop --command python3 build.py --arch ${{ matrix.arch }} --output artifacts/${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freeverb-scarlet-${{ matrix.arch }}
+          path: |
+            artifacts/${{ matrix.arch }}/staging/system/plugins/*
+            artifacts/${{ matrix.arch }}/build.json
+          if-no-files-found: error
