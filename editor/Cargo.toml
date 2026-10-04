@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT"
 repository = "https://github.com/petitstrawberry/resonara-freeverb"
 [dependencies]
-scarlet-ui = { git = "https://github.com/petitstrawberry/scarlet-ui", rev = "4005841e514690f3328c6e09b8b2b77656fa07de", default-features = false, features = ["std"] }
+scarlet-ui = { git = "https://github.com/petitstrawberry/scarlet-ui", rev = "6dbc9d87563d7d1dba529f04e7fbdfc850ca6ab6", default-features = false, features = ["std"] }
 [workspace]
 [profile.dev]
 debug = 0
