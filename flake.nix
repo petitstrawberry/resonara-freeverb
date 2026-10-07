@@ -23,7 +23,8 @@
         shellHook = "export PATH=${rust}/bin:$PATH";
       };
       host = pkgs.mkShell {
-        packages = [ pkgs.rustc pkgs.cargo ] ++ common;
+        packages = [ pkgs.rustc pkgs.cargo ] ++ common
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.pkg-config pkgs.fontconfig ];
       };
     });
   };
